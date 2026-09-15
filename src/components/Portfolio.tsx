@@ -35,6 +35,7 @@ import {
   updatePortfolioVideo, 
   extractYoutubeId 
 } from '../lib/firestoreService';
+import { apiClient, D1Video } from '../lib/apiClient';
 
 interface PortfolioProps {
   onPlayVideo: (item: PortfolioItem) => void;
@@ -83,14 +84,46 @@ export const Portfolio: React.FC<PortfolioProps> = ({
   const [isEditing, setIsEditing] = useState<boolean>(false);
 
   const categories = ['전체', '광고/홍보영상', '영상 공모전 수상작'];
+  const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
 
-  // Subscribe to Firestore Portfolio Data
+  // Subscribe to Firestore Portfolio Data & sync with Cloudflare D1 /api/videos
   useEffect(() => {
     const unsubscribe = subscribePortfolios((fetchedItems) => {
       setItems(fetchedItems);
     });
+
+    // Cloudflare D1 API /api/videos 통신 확인
+    const syncWithD1 = async () => {
+      try {
+        const res = await apiClient.getVideos();
+        if (!res.success && res.message) {
+          console.warn('[D1 Sync Notice]:', res.message);
+        }
+      } catch (err) {
+        console.error('[D1 Sync Error]:', err);
+      }
+    };
+    syncWithD1();
+
     return () => unsubscribe();
   }, []);
+
+  // Track category click activity to Cloudflare Pages Functions
+  const handleCategorySelect = async (cat: string) => {
+    setActiveCategory(cat);
+    setCarouselIndex(0);
+
+    // D1 활동 로그 비동기 전송
+    try {
+      await apiClient.recordActivity({
+        actionType: 'CATEGORY_CLICK',
+        categoryClicked: cat,
+        metadata: { timestamp: new Date().toISOString() }
+      });
+    } catch (e) {
+      console.warn('Failed to record category click to D1:', e);
+    }
+  };
 
   const handleOpenAdd = () => {
     if (!currentUser) {
@@ -135,7 +168,29 @@ export const Portfolio: React.FC<PortfolioProps> = ({
         runtime: customRuntime || '02:00'
       };
 
+      // 1. Firebase Firestore 실시간 저장
       await addPortfolioVideo(newVideoData);
+
+      // 2. Cloudflare D1 (/api/videos) 엔드포인트 연동 (비동기 병렬 저장)
+      try {
+        const d1Res = await apiClient.uploadVideo({
+          title: newVideoData.title,
+          videoUrl: newVideoData.youtubeUrl,
+          youtubeId: ytId,
+          category: newVideoData.category,
+          client: newVideoData.client,
+          year: newVideoData.year,
+          description: newVideoData.description,
+          runtime: newVideoData.runtime,
+          isFeatured: newVideoData.isFeatured
+        }, 'Admin');
+
+        if (!d1Res.success && d1Res.message) {
+          console.warn('[D1 Upload Note]:', d1Res.message);
+        }
+      } catch (d1Err) {
+        console.warn('[D1 Upload Exception]:', d1Err);
+      }
 
       setCustomUrl('');
       setCustomTitle('');
@@ -143,8 +198,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({
       setCustomTags('영상제작, 홍보영상, MdiaLab');
       setCustomFeatured(false);
       setShowAddModal(false);
-    } catch (err) {
+      setApiErrorMessage(null);
+    } catch (err: any) {
       console.error("Error adding video:", err);
+      setApiErrorMessage(err.message || "영상 등록 중 통신 오류가 발생했습니다.");
       alert("영상 등록 중 오류가 발생했습니다.");
     } finally {
       setIsSubmitting(false);
@@ -227,9 +284,19 @@ export const Portfolio: React.FC<PortfolioProps> = ({
     if (!window.confirm(`[${item.title}] 영상을 포트폴리오에서 삭제하시겠습니까?`)) return;
 
     try {
+      // 1. Firebase Firestore 삭제
       await deletePortfolioVideo(item.id);
-    } catch (err) {
+
+      // 2. Cloudflare D1 /api/videos DELETE 연동
+      try {
+        await apiClient.deleteVideo(item.id, 'Admin');
+      } catch (d1Err) {
+        console.warn('[D1 Delete Note]:', d1Err);
+      }
+      setApiErrorMessage(null);
+    } catch (err: any) {
       console.error("Error deleting video:", err);
+      setApiErrorMessage(err.message || "동영상 삭제 처리 중 오류가 발생했습니다.");
       alert("동영상 삭제 중 오류가 발생했습니다. (관리자 권한을 확인하세요)");
     }
   };

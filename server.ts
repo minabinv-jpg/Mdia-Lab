@@ -43,9 +43,74 @@ interface ChatLogData {
   updatedAt: string;
 }
 
-// In-memory data store for notices, inquiries, and chat logs
+// In-memory data store for notices, inquiries, chat logs, and Cloudflare D1 compatibility
 const inquiries: InquiryData[] = [];
 const chatLogsStore: ChatLogData[] = [];
+
+interface D1MockUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'Admin' | 'User';
+  createdAt: string;
+  lastLoginAt: string;
+}
+
+interface D1MockVideo {
+  id: string;
+  title: string;
+  videoUrl: string;
+  youtubeId?: string;
+  category: string;
+  client: string;
+  year: string;
+  description: string;
+  runtime?: string;
+  isFeatured?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface D1MockActivity {
+  id: string;
+  userId: string;
+  loginTime?: string;
+  videoId?: string;
+  categoryClicked?: string;
+  actionType: string;
+  metadata?: any;
+  createdAt: string;
+}
+
+const d1UsersStore: D1MockUser[] = [
+  {
+    id: 'admin-root',
+    email: 'admin@mdialab.com',
+    name: 'Mdia Lab 총괄디렉터',
+    role: 'Admin',
+    createdAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString()
+  }
+];
+
+const d1VideosStore: D1MockVideo[] = [
+  {
+    id: 'p1',
+    title: "시네마틱 공식 메인 쇼릴 'The Vision of Cinema'",
+    videoUrl: 'https://youtu.be/SeXdFQYOZvg',
+    youtubeId: 'SeXdFQYOZvg',
+    category: '광고/홍보영상',
+    client: 'Mdia Lab Original',
+    year: '2026',
+    description: 'RED V-Raptor & 아나모픽 렌즈로 담아낸 Mdia Lab의 감각적인 시네마틱 4K 쇼릴 필름입니다.',
+    runtime: '01:45',
+    isFeatured: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+const d1ActivityStore: D1MockActivity[] = [];
 
 const initialNotices: NoticeData[] = [
   {
@@ -103,6 +168,190 @@ async function startServer() {
   // API Routes
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "Mdia Lab Express Server" });
+  });
+
+  // ====================================================================
+  // Cloudflare Pages Functions Equivalent Endpoints (for dev/preview)
+  // ====================================================================
+
+  // 1. /api/auth - 사용자 로그인 및 권한(Admin/User) 반환
+  app.post("/api/auth", (req, res) => {
+    const { email, password, name } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "이메일은 필수 입력값입니다." });
+    }
+
+    const nowIso = new Date().toISOString();
+    let user = d1UsersStore.find(u => u.email === email);
+
+    if (!user) {
+      const assignedRole = email === "admin@mdialab.com" || email.includes("admin") ? "Admin" : "User";
+      const newUserId = "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+      const userName = name || email.split("@")[0];
+
+      user = {
+        id: newUserId,
+        email,
+        name: userName,
+        role: assignedRole,
+        createdAt: nowIso,
+        lastLoginAt: nowIso
+      };
+      d1UsersStore.push(user);
+    } else {
+      user.lastLoginAt = nowIso;
+    }
+
+    // Activity log: LOGIN
+    d1ActivityStore.unshift({
+      id: "act_" + Date.now(),
+      userId: user.id,
+      loginTime: nowIso,
+      actionType: "LOGIN",
+      metadata: { clientAgent: req.headers["user-agent"] },
+      createdAt: nowIso
+    });
+
+    return res.json({
+      success: true,
+      message: "로그인 성공",
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        lastLoginAt: user.lastLoginAt
+      }
+    });
+  });
+
+  // 2. /api/videos - 영상 목록 불러오기 (GET)
+  app.get("/api/videos", (_req, res) => {
+    return res.json({
+      success: true,
+      videos: d1VideosStore
+    });
+  });
+
+  // 2-2. /api/videos - 관리자 영상 업로드 (POST)
+  app.post("/api/videos", (req, res) => {
+    const {
+      id,
+      title,
+      videoUrl,
+      youtubeId,
+      category = "광고/홍보영상",
+      client = "Mdia Lab",
+      year = new Date().getFullYear().toString(),
+      description = "",
+      runtime = "02:00",
+      isFeatured = false,
+      userRole = "Admin"
+    } = req.body;
+
+    if (userRole !== "Admin") {
+      return res.status(403).json({ success: false, message: "영상 등록 권한이 없습니다. (관리자 전용)" });
+    }
+
+    if (!title || !videoUrl) {
+      return res.status(400).json({ success: false, message: "영상 제목과 영상 URL은 필수 입력 사항입니다." });
+    }
+
+    const videoId = id || "vid_" + Date.now();
+    const nowIso = new Date().toISOString();
+
+    const newVideo: D1MockVideo = {
+      id: videoId,
+      title,
+      videoUrl,
+      youtubeId: youtubeId || "",
+      category,
+      client,
+      year,
+      description,
+      runtime,
+      isFeatured: !!isFeatured,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    d1VideosStore.unshift(newVideo);
+
+    return res.status(201).json({
+      success: true,
+      message: "영상 등록이 완료되었습니다.",
+      video: newVideo
+    });
+  });
+
+  // 2-3. /api/videos - 영상 삭제 (DELETE)
+  app.delete("/api/videos", (req, res) => {
+    const videoId = (req.query.id as string) || req.body.id;
+    const userRole = req.body.userRole || "Admin";
+
+    if (userRole !== "Admin") {
+      return res.status(403).json({ success: false, message: "영상 삭제 권한이 없습니다. (관리자 전용)" });
+    }
+
+    if (!videoId) {
+      return res.status(400).json({ success: false, message: "삭제할 영상의 ID(id)가 필요합니다." });
+    }
+
+    const index = d1VideosStore.findIndex(v => v.id === videoId);
+    if (index !== -1) {
+      d1VideosStore.splice(index, 1);
+    }
+
+    return res.json({
+      success: true,
+      message: `영상(${videoId})이 성공적으로 삭제되었습니다.`,
+      deletedId: videoId
+    });
+  });
+
+  // 3. /api/activity - 활동 로그 기록 (POST)
+  app.post("/api/activity", (req, res) => {
+    const {
+      userId = "anonymous_guest",
+      actionType,
+      videoId = null,
+      categoryClicked = null,
+      metadata = {},
+      loginTime
+    } = req.body;
+
+    if (!actionType) {
+      return res.status(400).json({ success: false, message: "활동 유형(actionType)은 필수 입력 사항입니다." });
+    }
+
+    const nowIso = new Date().toISOString();
+    const logItem: D1MockActivity = {
+      id: "act_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      userId,
+      loginTime: loginTime || nowIso,
+      videoId: videoId || undefined,
+      categoryClicked: categoryClicked || undefined,
+      actionType,
+      metadata,
+      createdAt: nowIso
+    };
+
+    d1ActivityStore.unshift(logItem);
+
+    return res.status(201).json({
+      success: true,
+      message: "활동 데이터가 성공적으로 기록되었습니다.",
+      logId: logItem.id
+    });
+  });
+
+  // 3-2. /api/activity - 활동 로그 목록 조회 (GET)
+  app.get("/api/activity", (_req, res) => {
+    return res.json({
+      success: true,
+      count: d1ActivityStore.length,
+      logs: d1ActivityStore.slice(0, 100)
+    });
   });
 
   // Get all notices (sanitized password field)
