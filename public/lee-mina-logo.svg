@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <!-- Black Square Canvas from uploaded design -->
+  <rect width="500" height="500" rx="16" fill="#161616" />
+
+  <!-- Typography grid: LEE MINA -->
+  <g fill="#FFFFFF" font-family="'Helvetica Neue', 'Segoe UI', Arial, 'Inter', sans-serif" font-weight="800" font-size="70" text-anchor="middle" dominant-baseline="central">
+    <!-- Row 1: L and M -->
+    <text x="160" y="110">L</text>
+    <text x="340" y="110">M</text>
+
+    <!-- Row 2: E and I -->
+    <text x="160" y="200">E</text>
+    <text x="340" y="200">I</text>
+
+    <!-- Row 3: E and N -->
+    <text x="160" y="290">E</text>
+    <text x="340" y="290">N</text>
+
+    <!-- Row 4: Rounded block symbol and A -->
+    <text x="340" y="380">A</text>
+  </g>
+
+  <!-- Row 4 Left Symbol: White rounded camera/indicator mark -->
+  <rect x="134" y="362" width="52" height="36" rx="10" fill="#FFFFFF" />
+</svg>

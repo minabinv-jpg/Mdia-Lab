@@ -1,0 +1,6 @@
+{
+  "name": "Mdia Lab",
+  "description": "Mdia Lab - 영상, 영화 제작, 광고 홍보영상 및 제작 강의 문의 모던 웹사이트",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

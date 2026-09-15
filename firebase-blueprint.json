@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "portfolios": {
+      "title": "Portfolio Videos",
+      "description": "Video portfolios managed by Mdia Lab Admin",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "client": { "type": "string" },
+        "year": { "type": "string" },
+        "youtubeUrl": { "type": "string" },
+        "youtubeId": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "description": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "isFeatured": { "type": "boolean" },
+        "runtime": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "youtubeUrl"]
+    },
+    "estimates": {
+      "title": "Estimate Requests",
+      "description": "Customer quote and workshop inquiries",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "budget": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "email"]
+    },
+    "settings": {
+      "title": "App Settings",
+      "description": "Global settings like Showreel video configuration",
+      "properties": {
+        "showreelUrl": { "type": "string" },
+        "showreelTitle": { "type": "string" },
+        "showreelRuntime": { "type": "string" }
+      }
+    },
+    "testimonials": {
+      "title": "Client Testimonials",
+      "description": "Client reviews with public/private status managed by admin",
+      "properties": {
+        "id": { "type": "string" },
+        "quote": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientRole": { "type": "string" },
+        "company": { "type": "string" },
+        "avatar": { "type": "string" },
+        "rating": { "type": "number" },
+        "projectName": { "type": "string" },
+        "projectCategory": { "type": "string" },
+        "date": { "type": "string" },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["quote", "clientName", "rating"]
+    }
+  },
+  "securityRules": {
+    "match /portfolios/{portfolioId}": {
+      "allow read": "true",
+      "allow write": "request.auth != null"
+    },
+    "match /estimates/{estimateId}": {
+      "allow create": "true",
+      "allow read, update, delete": "request.auth != null"
+    },
+    "match /settings/{settingId}": {
+      "allow read": "true",
+      "allow write": "request.auth != null"
+    },
+    "match /testimonials/{testimonialId}": {
+      "allow read": "true",
+      "allow create": "true",
+      "allow update, delete": "request.auth != null"
+    }
+  }
+}
