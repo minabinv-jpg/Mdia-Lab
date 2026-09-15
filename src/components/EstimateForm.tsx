@@ -100,32 +100,73 @@ export const EstimateForm: React.FC<EstimateFormProps> = ({
     setErrorMessage(null);
     setIsSubmitting(true);
 
+    const targetEmail = "minabinv2@gmail.com";
+    const mailSubject = `[MdiaLab 견적문의] ${formData.name}님의 제작 문의건`;
+    const mailBody = `[Mdia Lab 무료 견적 문의서]
+--------------------------------------------------
+■ 의뢰인 / 기업명: ${formData.name}
+■ 연락처: ${formData.phone}
+■ 이메일: ${formData.email}
+■ 제작 카테고리: ${formData.category}
+■ 희망 예산대: ${formData.budget}
+■ 제작 일정: ${formData.timeline}
+■ 참고 영상 / 레퍼런스: ${formData.youtubeRef || '없음'}
+■ 첨부 기획서 파일 수: ${formData.files.length}건
+--------------------------------------------------
+■ 문의 내용 및 요구사항:
+${formData.message}
+--------------------------------------------------
+* 접수 일시: ${new Date().toLocaleString('ko-KR')}`;
+
     try {
       // 1. Submit to Firestore DB
-      const firestoreId = await submitEstimateToFirestore({
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        category: formData.category,
-        budget: formData.budget,
-        timeline: formData.timeline,
-        youtubeRef: formData.youtubeRef,
-        message: formData.message,
-        filesCount: formData.files.length
-      });
+      let firestoreId: string | null = null;
+      try {
+        firestoreId = await submitEstimateToFirestore({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          category: formData.category,
+          budget: formData.budget,
+          timeline: formData.timeline,
+          youtubeRef: formData.youtubeRef,
+          message: formData.message,
+          filesCount: formData.files.length
+        });
+      } catch (fErr) {
+        console.warn('Firestore submission notice:', fErr);
+      }
 
-      // 2. Also notify backend API server
+      // 2. Also notify backend API server (/api/inquire)
       try {
         await fetch('/api/inquire', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
+          body: JSON.stringify({
+            ...formData,
+            recipientEmail: targetEmail
+          })
         });
-      } catch (e) {
-        console.warn('API route call error:', e);
+      } catch (apiErr) {
+        console.warn('API route call notice:', apiErr);
       }
 
-      setSubmittedInquiryId(firestoreId || `INQ-${Date.now()}`);
+      const generatedId = firestoreId || `INQ-${Date.now()}`;
+      setSubmittedInquiryId(generatedId);
+
+      // 3. Direct Mail Client Trigger: Open user's default email client addressed to minabinv2@gmail.com
+      const mailtoUrl = `mailto:${targetEmail}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
+      try {
+        const mailLink = document.createElement('a');
+        mailLink.href = mailtoUrl;
+        mailLink.target = '_blank';
+        mailLink.rel = 'noopener noreferrer';
+        document.body.appendChild(mailLink);
+        mailLink.click();
+        document.body.removeChild(mailLink);
+      } catch (mailErr) {
+        console.warn('Direct mailto trigger notice:', mailErr);
+      }
     } catch (err: any) {
       console.error('Inquiry submission error:', err);
       setErrorMessage(err.message || '견적 제출 중 오류가 발생했습니다.');
@@ -422,18 +463,35 @@ export const EstimateForm: React.FC<EstimateFormProps> = ({
               <span className="text-[10px] bg-blue-100 text-[#0300b0] px-2 py-0.5 rounded font-sans">Firestore DB 저장 완료</span>
             </div>
 
-            <p className="text-xs text-neutral-600 leading-relaxed mb-6 bg-blue-50/70 p-3 rounded-lg border border-blue-100 text-left">
-              💡 <strong>DB 접수 완료:</strong> 본 문의건은 Firestore DB에 실시간 보관되며 관리자 로그인 후 조회 가능합니다.<br/>
-              ✉️ <strong>minabinv2@gmail.com 메일 직접 전송:</strong> 아래 버튼을 클릭하면 메일 앱에서 지정 메일 주소로 사본을 직접 전송할 수 있습니다.
-            </p>
+            <div className="text-xs text-neutral-700 leading-relaxed mb-6 bg-blue-50/80 p-4 rounded-xl border border-blue-200 text-left space-y-2">
+              <div className="flex items-center gap-1.5 font-bold text-[#0300b0]">
+                <Mail className="w-4 h-4" />
+                <span>수신 메일: minabinv2@gmail.com</span>
+              </div>
+              <p className="text-[11px] text-neutral-600">
+                기본 메일 앱이 자동으로 열리지 않았거나 웹메일(Gmail, Naver 등)을 사용 중이신 경우, 아래 버튼을 통해 <strong>원클릭으로 메일을 전송</strong>하실 수 있습니다.
+              </p>
+            </div>
 
             <div className="space-y-2">
+              {/* Direct Gmail Webmail link */}
               <a
-                href={`mailto:minabinv2@gmail.com?subject=[MdiaLab 견적문의] ${formData.name}님 문의건 (${submittedInquiryId})&body=성함/기업명: ${formData.name}%0D%0A연락처: ${formData.phone}%0D%0A이메일: ${formData.email}%0D%0A카테고리: ${formData.category}%0D%0A예산: ${formData.budget}%0D%0A일정: ${formData.timeline}%0D%0A참고링크: ${formData.youtubeRef}%0D%0A%0D%0A문의내용:%0D%0A${formData.message}`}
+                href={`https://mail.google.com/mail/?view=cm&fs=1&to=minabinv2@gmail.com&su=${encodeURIComponent(`[MdiaLab 견적문의] ${formData.name}님의 제작 문의건`)}&body=${encodeURIComponent(`[Mdia Lab 무료 견적 문의서]\n\n■ 의뢰인/기업명: ${formData.name}\n■ 연락처: ${formData.phone}\n■ 이메일: ${formData.email}\n■ 제작 카테고리: ${formData.category}\n■ 희망 예산대: ${formData.budget}\n■ 제작 일정: ${formData.timeline}\n■ 참고 영상: ${formData.youtubeRef || '없음'}\n\n■ 문의 내용:\n${formData.message}\n`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 flex items-center justify-center gap-2 transition-colors shadow-sm"
+              >
+                <Mail className="w-4 h-4 inline-block" />
+                <span>웹 브라우저 Gmail로 직접 전송하기</span>
+              </a>
+
+              {/* Default Mail App link */}
+              <a
+                href={`mailto:minabinv2@gmail.com?subject=${encodeURIComponent(`[MdiaLab 견적문의] ${formData.name}님의 제작 문의건`)}&body=${encodeURIComponent(`[Mdia Lab 무료 견적 문의서]\n\n■ 의뢰인/기업명: ${formData.name}\n■ 연락처: ${formData.phone}\n■ 이메일: ${formData.email}\n■ 제작 카테고리: ${formData.category}\n■ 희망 예산대: ${formData.budget}\n■ 제작 일정: ${formData.timeline}\n■ 참고 영상: ${formData.youtubeRef || '없음'}\n\n■ 문의 내용:\n${formData.message}\n`)}`}
                 className="w-full py-3.5 bg-[#0300b0] text-white text-xs font-bold rounded-xl hover:opacity-90 flex items-center justify-center gap-2 transition-opacity shadow-sm"
               >
                 <Mail className="w-4 h-4 inline-block" />
-                <span>minabinv2@gmail.com 메일로 사본 전송하기</span>
+                <span>기본 메일 앱(아웃룩/애플메일)으로 전송하기</span>
               </a>
 
               <button
@@ -452,7 +510,7 @@ export const EstimateForm: React.FC<EstimateFormProps> = ({
                     files: []
                   });
                 }}
-                className="w-full py-3 bg-neutral-900 text-white text-xs font-bold rounded-lg hover:bg-neutral-800"
+                className="w-full py-3 bg-neutral-900 text-white text-xs font-bold rounded-lg hover:bg-neutral-800 cursor-pointer"
               >
                 확인 및 닫기
               </button>

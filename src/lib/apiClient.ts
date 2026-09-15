@@ -190,5 +190,132 @@ export const apiClient = {
         message: err.message || '활동 로그 전송 실패'
       };
     }
+  },
+
+  // 7. /api/notices 게시글 목록 불러오기 (GET)
+  async getNotices(): Promise<{ success: boolean; notices: any[]; message?: string }> {
+    try {
+      const res = await fetch('/api/notices', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || `게시글 목록 불러오기 실패 (${res.status})`);
+      }
+
+      return { success: true, notices: data.notices || [] };
+    } catch (err: any) {
+      console.error('[API Error: /api/notices GET]', err);
+      return {
+        success: false,
+        notices: [],
+        message: err.message || '게시글 목록을 불러오는 중 통신 오류가 발생했습니다.'
+      };
+    }
+  },
+
+  // 8. /api/notices 새 질문 또는 글 작성 (POST)
+  async createNotice(postData: {
+    category: string;
+    title: string;
+    author: string;
+    content: string;
+    password?: string;
+    isSecret?: boolean;
+  }): Promise<{ success: boolean; notice?: any; message?: string }> {
+    try {
+      const res = await fetch('/api/notices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(postData)
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || `게시글 등록 실패 (${res.status})`);
+      }
+
+      return { success: true, notice: data.notice, message: data.message };
+    } catch (err: any) {
+      console.error('[API Error: /api/notices POST]', err);
+      return {
+        success: false,
+        message: err.message || '게시글 등록 중 통신 오류가 발생했습니다.'
+      };
+    }
+  },
+
+  // 9. /api/notices/:id/verify 비밀번호 확인 (POST)
+  async verifyNoticePassword(noticeId: string, password?: string, isAdmin: boolean = false): Promise<{ success: boolean; notice?: any; message?: string }> {
+    try {
+      const res = await fetch(`/api/notices/${encodeURIComponent(noticeId)}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, isAdmin })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || `비밀번호 확인 실패 (${res.status})`);
+      }
+
+      return { success: true, notice: data.notice };
+    } catch (err: any) {
+      console.error('[API Error: /api/notices/:id/verify POST]', err);
+      return {
+        success: false,
+        message: err.message || '비밀번호 확인 중 오류가 발생했습니다.'
+      };
+    }
+  },
+
+  // 10. /api/notices/:id 게시글 삭제 (DELETE)
+  async deleteNotice(noticeId: string, password?: string, isAdmin: boolean = false): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await fetch(`/api/notices/${encodeURIComponent(noticeId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, isAdmin })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || `게시글 삭제 실패 (${res.status})`);
+      }
+
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      console.error('[API Error: /api/notices/:id DELETE]', err);
+      return {
+        success: false,
+        message: err.message || '게시글 삭제 처리 중 오류가 발생했습니다.'
+      };
+    }
+  },
+
+  // 11. /api/notices/:id/answer 답변 등록 (POST)
+  async saveNoticeAnswer(noticeId: string, answer: string, isAdmin: boolean = true): Promise<{ success: boolean; notice?: any; message?: string }> {
+    try {
+      const res = await fetch(`/api/notices/${encodeURIComponent(noticeId)}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer, isAdmin })
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.success) {
+        throw new Error((data && data.message) || `답변 등록 실패 (${res.status})`);
+      }
+
+      return { success: true, notice: data.notice, message: data.message };
+    } catch (err: any) {
+      console.error('[API Error: /api/notices/:id/answer POST]', err);
+      return {
+        success: false,
+        message: err.message || '답변 등록 중 오류가 발생했습니다.'
+      };
+    }
   }
 };

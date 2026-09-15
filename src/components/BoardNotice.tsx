@@ -3,9 +3,10 @@ import { NoticeItem } from '../types';
 import { 
   MessageSquare, Pin, Eye, Plus, Search, Calendar, User, X, Check, 
   FileText, Lock, KeyRound, Trash2, ShieldCheck, CornerDownRight, MessageCircleQuestion,
-  Edit, ShieldAlert
+  Edit, ShieldAlert, AlertCircle
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
+import { apiClient } from '../lib/apiClient';
 
 interface BoardNoticeProps {
   currentUser?: FirebaseUser | null;
@@ -41,6 +42,7 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
   const [newPassword, setNewPassword] = useState<string>('');
   const [newIsSecret, setNewIsSecret] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [createErrorMessage, setCreateErrorMessage] = useState<string | null>(null);
 
   // Edit post form state
   const [editCategory, setEditCategory] = useState<"공지" | "강의안내" | "제작일기" | "질문답변">('질문답변');
@@ -61,10 +63,9 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
 
   const fetchNotices = async () => {
     try {
-      const res = await fetch('/api/notices');
-      const data = await res.json();
-      if (data.success) {
-        setNotices(data.notices);
+      const res = await apiClient.getNotices();
+      if (res.success && res.notices) {
+        setNotices(res.notices);
       }
     } catch (e) {
       console.error('Failed to fetch notices:', e);
@@ -74,6 +75,7 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
   };
 
   const handleOpenCreateModal = () => {
+    setCreateErrorMessage(null);
     if (!currentUser) {
       setNewCategory('질문답변');
       setNewIsSecret(true);
@@ -83,11 +85,16 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newContent.trim()) return;
+    setCreateErrorMessage(null);
+    if (!newTitle.trim() || !newContent.trim()) {
+      setCreateErrorMessage("제목과 내용을 모두 입력해주세요.");
+      return;
+    }
 
     // Validation for regular users
     if (!currentUser) {
       if (!newPassword.trim()) {
+        setCreateErrorMessage("질문답변 글 작성을 위해 비밀번호를 입력해주세요.");
         alert("질문답변 글 작성을 위해 비밀번호를 입력해주세요.\n입력하신 비밀번호로 작성된 질문과 답변을 확인하실 수 있습니다.");
         return;
       }
@@ -98,32 +105,35 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/notices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category: postCategory,
-          title: newTitle,
-          author: newAuthor || '방문자',
-          content: newContent,
-          password: newPassword || undefined,
-          isSecret: postSecret
-        })
+      const res = await apiClient.createNotice({
+        category: postCategory,
+        title: newTitle.trim(),
+        author: newAuthor.trim() || '방문자',
+        content: newContent.trim(),
+        password: newPassword.trim() || undefined,
+        isSecret: postSecret
       });
-      const data = await res.json();
-      if (data.success) {
-        setNotices([data.notice, ...notices]);
+
+      if (res.success && res.notice) {
+        setNotices(prev => [res.notice, ...prev]);
         setNewTitle('');
         setNewAuthor('');
         setNewContent('');
         setNewPassword('');
         setNewIsSecret(true);
+        setCreateErrorMessage(null);
         setShowCreateModal(false);
         alert(currentUser ? "게시글이 성공적으로 등록되었습니다." : "질문답변 게시글이 비밀글로 성공적으로 등록되었습니다.");
+      } else {
+        const errMsg = res.message || "게시글 등록에 실패했습니다.";
+        setCreateErrorMessage(errMsg);
+        alert(errMsg);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to create post:', e);
-      alert("게시글 등록 중 오류가 발생했습니다.");
+      const errMsg = e.message || "게시글 등록 중 통신 오류가 발생했습니다.";
+      setCreateErrorMessage(errMsg);
+      alert(errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -181,24 +191,19 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
     setVerifying(true);
     setVerifyError('');
     try {
-      const res = await fetch(`/api/notices/${notice.id}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd, isAdmin: isAdminOverride || !!currentUser })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSelectedNotice(data.notice);
+      const res = await apiClient.verifyNoticePassword(notice.id, pwd, isAdminOverride || !!currentUser);
+      if (res.success && res.notice) {
+        setSelectedNotice(res.notice);
         if (pwd) {
           setSessionPasswords(prev => ({ ...prev, [notice.id]: pwd }));
         }
         setPendingNotice(null);
-        setAdminAnswer(data.notice.answer || '');
+        setAdminAnswer(res.notice.answer || '');
       } else {
-        setVerifyError(data.message || '비밀번호가 일치하지 않습니다.');
+        setVerifyError(res.message || '비밀번호가 일치하지 않습니다.');
       }
-    } catch (e) {
-      setVerifyError('비밀번호 검증 중 오류가 발생했습니다.');
+    } catch (e: any) {
+      setVerifyError(e.message || '비밀번호 검증 중 오류가 발생했습니다.');
     } finally {
       setVerifying(false);
     }
@@ -232,25 +237,17 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
     const cachedPwd = sessionPasswords[notice.id];
     setDeleting(true);
     try {
-      const res = await fetch(`/api/notices/${notice.id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: cachedPwd,
-          isAdmin: !!currentUser
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await apiClient.deleteNotice(notice.id, cachedPwd, !!currentUser);
+      if (res.success) {
         setNotices(prev => prev.filter(n => n.id !== notice.id));
         setSelectedNotice(null);
         alert("게시글이 삭제되었습니다.");
       } else {
-        alert(data.message || "삭제 실패: 비밀번호가 일치하지 않습니다.");
+        alert(res.message || "삭제 실패: 비밀번호가 일치하지 않습니다.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Delete error:", e);
-      alert("삭제 처리 중 오류가 발생했습니다.");
+      alert(e.message || "삭제 처리 중 오류가 발생했습니다.");
     } finally {
       setDeleting(false);
     }
@@ -260,25 +257,17 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
     if (!adminAnswer.trim()) return;
     setSubmittingAnswer(true);
     try {
-      const res = await fetch(`/api/notices/${noticeId}/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          answer: adminAnswer,
-          isAdmin: true
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSelectedNotice(data.notice);
-        setNotices(prev => prev.map(n => n.id === noticeId ? { ...n, answer: data.notice.answer, answeredAt: data.notice.answeredAt } : n));
+      const res = await apiClient.saveNoticeAnswer(noticeId, adminAnswer.trim(), true);
+      if (res.success && res.notice) {
+        setSelectedNotice(res.notice);
+        setNotices(prev => prev.map(n => n.id === noticeId ? { ...n, answer: res.notice.answer, answeredAt: res.notice.answeredAt } : n));
         alert("답변이 정상적으로 등록되었습니다.");
       } else {
-        alert(data.message || "답변 등록 권한이 없거나 처리 실패했습니다.");
+        alert(res.message || "답변 등록 권한이 없거나 처리 실패했습니다.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Save answer error:", e);
-      alert("답변 저장 중 오류가 발생했습니다.");
+      alert(e.message || "답변 저장 중 오류가 발생했습니다.");
     } finally {
       setSubmittingAnswer(false);
     }
@@ -662,6 +651,14 @@ export const BoardNotice: React.FC<BoardNoticeProps> = ({ currentUser, onOpenAdm
                 <span className="leading-relaxed">
                   일반 방문자는 <strong>[질문답변]</strong> 카테고리만 <strong>비밀글</strong>로 작성하실 수 있습니다. 설정하신 비밀번호로 질문 내용과 관리자의 답변을 확인하실 수 있습니다.
                 </span>
+              </div>
+            )}
+
+            {/* Error Message Banner */}
+            {createErrorMessage && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs font-bold text-red-700 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{createErrorMessage}</span>
               </div>
             )}
 

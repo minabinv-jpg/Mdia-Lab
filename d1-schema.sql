@@ -46,6 +46,30 @@ CREATE TABLE IF NOT EXISTS ActivityLogs (
   FOREIGN KEY (userId) REFERENCES Users(id) ON DELETE CASCADE
 );
 
+-- 4. Notices: 공지사항 및 방문자 질문답변(Q&A) 게시판 테이블
+CREATE TABLE IF NOT EXISTS Notices (
+  id TEXT PRIMARY KEY,                       -- 게시글 ID (예: notice-xxx)
+  category TEXT NOT NULL DEFAULT '질문답변',  -- 카테고리 ('공지', '강의안내', '제작일기', '질문답변')
+  title TEXT NOT NULL,                       -- 제목
+  author TEXT NOT NULL DEFAULT '방문자',     -- 작성자 (방문자 또는 관리자)
+  date TEXT NOT NULL,                        -- 작성일 (YYYY-MM-DD)
+  views INTEGER NOT NULL DEFAULT 1,          -- 조회수
+  content TEXT NOT NULL,                     -- 본문 내용
+  password TEXT,                             -- 비밀번호 (비공개 글 잠금용)
+  isSecret INTEGER NOT NULL DEFAULT 0,       -- 비밀글 여부 (1 or 0)
+  pinned INTEGER NOT NULL DEFAULT 0,         -- 상단 고정 여부 (1 or 0)
+  answer TEXT,                               -- 관리자 답변 내용
+  answeredAt TEXT,                           -- 관리자 답변 일시
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 초기 공지사항 데이터 시드
+INSERT OR IGNORE INTO Notices (id, category, title, author, date, views, content, isSecret, pinned, createdAt)
+VALUES 
+('notice-1', '공지', '[공지] 2026 Mdia Lab 공식 웹사이트 리뉴얼 및 견적 문의 안내', 'Mdia Lab 총괄디렉터', '2026-03-01', 128, '안녕하세요, Mdia Lab입니다. 2026년을 맞이하여 저희 공식 쇼릴과 함께 포트폴리오 웹사이트를 새롭게 개편하였습니다. 상업 광고 영상, 제품 홍보 영상, 기업 브랜디드 필름 등 다양한 프로젝트 문의는 견적 문의 폼 또는 이메일을 통해 언제든 편하게 접수해주시기 바랍니다.', 0, 1, CURRENT_TIMESTAMP),
+('notice-2', '강의안내', '[강의] 시네마틱 영상 연출 & 색보정(Color Grading) 원데이 클래스 모집', 'Mdia Lab 교육팀', '2026-03-10', 85, '현업 시네마 카메라 운용 기법과 DaVinci Resolve를 활용한 감각적인 컬러그레이딩 실전 워크숍 인원을 모집합니다. 상세 커리큘럼은 워크숍 섹션을 확인해 주세요.', 0, 0, CURRENT_TIMESTAMP);
+
 -- 성능 최적화를 위한 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_users_email ON Users(email);
 CREATE INDEX IF NOT EXISTS idx_videos_category ON Videos(category);
@@ -53,3 +77,5 @@ CREATE INDEX IF NOT EXISTS idx_videos_created ON Videos(createdAt DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_user ON ActivityLogs(userId);
 CREATE INDEX IF NOT EXISTS idx_activity_action ON ActivityLogs(actionType);
 CREATE INDEX IF NOT EXISTS idx_activity_created ON ActivityLogs(createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_notices_pinned ON Notices(pinned DESC, createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_notices_category ON Notices(category);
