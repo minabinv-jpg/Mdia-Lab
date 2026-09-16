@@ -90,7 +90,7 @@ export const BlogNews: React.FC = () => {
             <h2 className="text-3xl sm:text-4xl font-bold text-[#1A1A1A] tracking-tight">
               Mdia Lab 저널 & 아티클
             </h2>
-            <p className="text-base text-gray-500 max-w-2xl">
+            <p className="text-base text-gray-500 max-w-none md:whitespace-nowrap break-keep">
               시네마토그래피 제작 비하인드 스토리, 전문 색보정 팁, 스튜디오 장비 리뷰 및 실전 영상 연출 가이드를 공유합니다.
             </p>
           </div>

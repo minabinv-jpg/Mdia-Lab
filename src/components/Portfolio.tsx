@@ -366,8 +366,10 @@ export const Portfolio: React.FC<PortfolioProps> = ({
             <h2 className="text-3xl sm:text-4xl font-bold text-[#1A1A1A] tracking-tight">
               Mdia Lab 포트폴리오
             </h2>
-            <p className="text-base text-gray-500 max-w-2xl">
-              브랜드의 핵심 가치와 비전을 감각적인 시네마틱 영상 미학으로 완성도 높게 구현한 Mdia Lab의 공식 광고·홍보영상 포트폴리오입니다.
+            <p className="text-base text-gray-500 max-w-2xl leading-relaxed break-keep">
+              브랜드의 핵심 가치와 비전을 감각적인 시네마틱 영상 미학으로 완성도 높게 구현한
+              <br />
+              Mdia Lab의 공식 광고·홍보영상 포트폴리오입니다.
             </p>
           </div>
 

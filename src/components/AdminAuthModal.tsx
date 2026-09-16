@@ -24,14 +24,16 @@ interface AdminAuthModalProps {
   onNavigate?: (sectionId: string) => void;
 }
 
+const ADMIN_EMAIL = 'minabinv2@gmail.com';
+
 export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
   isOpen,
   onClose,
   currentUser,
   onNavigate
 }) => {
-  const [email, setEmail] = useState('admin@mdialab.com');
-  const [password, setPassword] = useState('admin1234!');
+  const [email, setEmail] = useState('minabinv2@gmail.com');
+  const [password, setPassword] = useState('');
   const [isSignUpMode, setIsSignUpMode] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
   const [adminTab, setAdminTab] = useState<'overview' | 'inquiries'>('overview');
   const [estimates, setEstimates] = useState<EstimateDoc[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -63,25 +67,27 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     setLoading(true);
 
     try {
+      let userCredential;
       if (isSignUpMode) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
       }
+
+      const loggedInEmail = userCredential.user?.email;
+      if (!loggedInEmail || loggedInEmail.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        await signOut(auth);
+        alert('관리자 권한이 없습니다.');
+        onClose();
+        return;
+      }
+
       onClose();
     } catch (err: any) {
       console.error("Auth error:", err);
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        // If user doesn't exist yet, offer auto sign-up
         if (!isSignUpMode) {
-          try {
-            await createUserWithEmailAndPassword(auth, email, password);
-            onClose();
-            setLoading(false);
-            return;
-          } catch (signUpErr: any) {
-            setErrorMsg("로그인 실패: 이메일 또는 비밀번호를 확인해 주세요.");
-          }
+          setErrorMsg("로그인 실패: 이메일 또는 비밀번호를 확인해 주세요.");
         } else {
           setErrorMsg("계정 생성 실패: 이메일 형식을 확인하거나 6자리 이상 비밀번호를 사용하세요.");
         }
@@ -95,31 +101,48 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     }
   };
 
+  // Google OAuth with strict admin email verification
   const handleGoogleAuth = async () => {
     setErrorMsg(null);
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const loggedInEmail = result.user?.email;
+
+      // 엄격한 관리자 이메일 검증: minabinv2@gmail.com 만 승인
+      if (!loggedInEmail || loggedInEmail.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        await signOut(auth);
+        alert('관리자 권한이 없습니다.');
+        onClose();
+        return;
+      }
+
       onClose();
     } catch (err: any) {
       console.error("Google Auth error:", err);
-      setErrorMsg("Google 로그인 실패: 팝업 창 상태를 확인해 주세요.");
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setErrorMsg("Google 로그인 실패: 팝업 창 상태를 확인해 주세요.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteEstimate = async (id?: string) => {
-    if (!id) return;
-    if (!confirm('이 견적 문의를 삭제하시겠습니까?')) return;
+  // 견적 문의 데이터 영구 삭제 핸들러 (인라인 확인 연동)
+  const executeDeleteEstimate = async (id: string) => {
     setDeletingId(id);
     try {
       await deleteEstimateFromFirestore(id);
+      // 로컬 상태 즉각 반영
+      setEstimates(prev => prev.filter(item => item.id !== id));
+      setDeleteSuccessMsg('견적 문의가 정상적으로 삭제되었습니다.');
+      setTimeout(() => setDeleteSuccessMsg(null), 3000);
     } catch (err) {
       console.error('Failed to delete estimate:', err);
-      alert('견적 문의 삭제 중 오류가 발생했습니다.');
+      alert('견적 문의 삭제 중 오류가 발생했습니다. 관리자 권한을 확인해 주세요.');
     } finally {
       setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -310,6 +333,15 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
             {/* Tab 2: Live Inquiries Box */}
             {adminTab === 'inquiries' && (
               <div className="flex-1 flex flex-col min-h-0 overflow-y-auto space-y-3 pr-1">
+                {deleteSuccessMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl font-bold flex items-center justify-between animate-in fade-in">
+                    <span>✓ {deleteSuccessMsg}</span>
+                    <button onClick={() => setDeleteSuccessMsg(null)} className="text-emerald-500 hover:text-emerald-800">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {estimates.length === 0 ? (
                   <div className="text-center py-12 text-neutral-400 space-y-2">
                     <Inbox className="w-10 h-10 mx-auto opacity-40" />
@@ -346,14 +378,38 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleDeleteEstimate(est.id)}
-                          disabled={deletingId === est.id}
-                          className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                          title="견적 문의 삭제"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {/* 견적 문의 삭제 버튼 (활성화 및 즉각 연동) */}
+                        <div className="shrink-0">
+                          {confirmDeleteId === est.id ? (
+                            <div className="flex items-center gap-1.5 animate-in fade-in">
+                              <span className="text-[11px] text-red-600 font-bold hidden sm:inline">삭제할까요?</span>
+                              <button
+                                onClick={() => est.id && executeDeleteEstimate(est.id)}
+                                disabled={deletingId === est.id}
+                                className="px-2.5 py-1 bg-red-600 text-white text-[11px] font-bold rounded-md hover:bg-red-700 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                              >
+                                {deletingId === est.id ? "삭제 중..." : "확인"}
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                disabled={deletingId === est.id}
+                                className="px-2 py-1 bg-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md hover:bg-neutral-300 transition-colors cursor-pointer"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => est.id && setConfirmDeleteId(est.id)}
+                              disabled={deletingId === est.id}
+                              className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white rounded-md text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                              title="견적 문의 영구 삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>문의 삭제</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-2.5 rounded-lg border border-neutral-100">
@@ -434,7 +490,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@mdialab.com"
+                    placeholder="minabinv2@gmail.com"
                     className="w-full pl-9 pr-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0300b0] focus:bg-white"
                   />
                 </div>

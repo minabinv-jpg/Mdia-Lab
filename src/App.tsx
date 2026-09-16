@@ -12,11 +12,10 @@ import { EstimateForm } from './components/EstimateForm';
 import { VideoModal } from './components/VideoModal';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { Footer } from './components/Footer';
-import { AIChatBot } from './components/AIChatBot';
 import { PortfolioItem } from './types';
 import { PORTFOLIO_DATA } from './data/mockData';
 import { auth } from './lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { 
   subscribeShowreelConfig, 
   updateShowreelConfig, 
@@ -39,10 +38,20 @@ export default function App() {
   const [estimateYoutubeRef, setEstimateYoutubeRef] = useState<string>('');
   const [estimateCategory, setEstimateCategory] = useState<string>('홍보영상 제작');
 
-  // Firebase Auth listener
+  // Firebase Auth listener - minabinv2@gmail.com 만 관리자로 승인
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        if (!user.email || user.email.trim().toLowerCase() !== 'minabinv2@gmail.com') {
+          // 비인가 계정 자동 차단 및 로그아웃
+          await signOut(auth);
+          setCurrentUser(null);
+          return;
+        }
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -206,9 +215,6 @@ export default function App() {
         currentUser={currentUser}
         onNavigate={handleNavigate}
       />
-
-      {/* 1:1 AI Automated Chatbot & Customer SMS Dispatch Floating Widget */}
-      <AIChatBot currentUser={currentUser} />
     </div>
   );
 }
