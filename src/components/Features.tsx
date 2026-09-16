@@ -74,7 +74,7 @@ export const Features: React.FC<FeaturesProps> = ({ onNavigate }) => {
                       <div className="w-4 h-4 rounded-full bg-[#1A1A1A] text-white flex items-center justify-center shrink-0 mt-0.5">
                         <Check className="w-2.5 h-2.5" />
                       </div>
-                      <span>{point}</span>
+                      <span className="break-keep leading-snug">{point}</span>
                     </li>
                   ))}
                 </ul>
